@@ -1,0 +1,389 @@
+%=====================================================================
+%  FICHE DE RÉVISION — Réseaux de neurones pour les EDP (PINN & Deep Ritz)
+%  Projet 1A — CERMICS.  Document autonome.
+%  Compilation : pdflatex (2 passes pour le sommaire)
+%=====================================================================
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\IfFileExists{french.ldf}{\usepackage[french]{babel}}{}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage[a4paper,margin=2.1cm]{geometry}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{bblue}{RGB}{51,51,178}
+\definecolor{dblue}{RGB}{38,38,134}
+\definecolor{lblue}{RGB}{233,233,243}
+\definecolor{codebg}{RGB}{237,242,234}
+
+\titleformat{\section}{\sffamily\large\bfseries\color{bblue}}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\sffamily\bfseries\color{dblue}}{\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\setlist[itemize]{leftmargin=1.3em,itemsep=1pt,topsep=2pt}
+
+% Boîte "formule clé"
+\newtcolorbox{formbox}[1][]{colback=lblue,colframe=bblue,boxrule=0.7pt,arc=2pt,
+  left=8pt,right=8pt,top=4pt,bottom=4pt,#1}
+% Boîte "question de jury"
+\newtcolorbox{qbox}[1]{colback=white,colframe=dblue,boxrule=0.7pt,arc=2pt,
+  left=8pt,right=8pt,top=4pt,bottom=4pt,
+  title={\sffamily\bfseries #1},coltitle=white,colbacktitle=dblue,fonttitle=\bfseries}
+\newcommand{\key}[1]{\textbf{#1}}
+
+\lstset{language=Python,basicstyle=\ttfamily\footnotesize,backgroundcolor=\color{codebg},
+  keywordstyle=\color{bblue}\bfseries,commentstyle=\color{gray}\itshape,
+  stringstyle=\color{dblue},showstringspaces=false,breaklines=true,
+  frame=single,rulecolor=\color{bblue!40},framesep=4pt,xleftmargin=4pt,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ô}{{\^o}}1 {É}{{\'E}}1 {â}{{\^a}}1 {ç}{{\c c}}1 {î}{{\^i}}1 {û}{{\^u}}1}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+
+\begin{document}
+
+\begin{center}
+  {\sffamily\bfseries\color{dblue}\Large Fiche de révision — Maîtrise du sujet}\\[3pt]
+  {\sffamily\color{bblue}\large Réseaux de neurones pour la résolution d'EDP : PINN \& Deep Ritz}\\[5pt]
+  {\small Projet 1A \;\textbullet\; CERMICS \;\textbullet\; Paul Rivaud \;\textbullet\; juin 2026}
+\end{center}
+\hrule height 0.8pt
+\vspace{4pt}
+
+{\small\tableofcontents}
+\vspace{4pt}\hrule height 0.4pt
+
+%==================================================================
+\section{Vue d'ensemble}
+Le projet résout numériquement deux EDP 1D sur l'ouvert $\Omega=\,]0,1[$ —
+l'\key{équation de Poisson} et l'\key{équation de Helmholtz modifiée} — en
+\key{approchant la solution par un réseau de neurones}. Deux paradigmes sont
+implémentés en PyTorch :
+\begin{itemize}
+  \item \key{PINN} (\emph{Physics-Informed Neural Network}) : formulation
+        \key{forte}, on minimise le \key{résidu} de l'EDP ;
+  \item \key{Deep Ritz} : formulation \key{faible/variationnelle}, on minimise une
+        \key{énergie}.
+\end{itemize}
+Idée commune : transformer « résoudre une EDP » en « \key{minimiser une fonction de
+perte} » par descente de gradient, les dérivées du réseau étant obtenues par
+\key{différentiation automatique}.
+
+%==================================================================
+\section{Concepts clés}
+
+\subsection*{EDP : formulation forte vs faible}
+\begin{itemize}
+  \item \key{Forte} : on cherche $u\in C^2(\Omega)$ vérifiant l'équation
+        \emph{en tout point}. Nécessite ici une \key{dérivée seconde}.
+  \item \key{Faible (variationnelle)} : on cherche $u\in H^1_0(\Omega)$ tel que
+        $a(u,v)=b(v)$ pour toute fonction test $v$. Ne demande qu'une
+        \key{dérivée première} ; cadre du théorème de \key{Lax-Milgram}
+        (existence \& unicité si $a$ continue et coercive).
+\end{itemize}
+
+\subsection*{Réseau de neurones}
+Modèle paramétrique : un graphe de neurones organisés en couches, chacun calculant
+une \key{transformation non linéaire} d'une combinaison linéaire pondérée de ses
+entrées. La non-linéarité vient de la \key{fonction d'activation} $\sigma$.
+\key{Apprendre} = minimiser une perte par descente de gradient + \key{rétropropagation}.
+
+\subsection*{PINN}
+Le réseau $u_\theta$ \key{est} la solution approchée. On injecte l'EDP et les
+conditions aux bords (CL) dans la perte via le \key{résidu}. Cadre
+\key{non supervisé} : pas de données $(x,u(x))$, la « supervision » vient de la
+physique. Convient aux problèmes \key{directs et inverses}.
+
+\subsection*{Fonction de perte physique}
+Somme d'un terme \key{intérieur} (résidu de l'EDP sur des \key{points de
+collocation}) et d'un terme de \key{bord} (pénalisation des CL).
+
+\subsection*{Entraînement}
+\key{Différentiation automatique} (dérivées exactes du réseau, sans pas $h$ ni
+erreur de troncature) ; \key{descente de gradient} (optimiseur \key{Adam}) ;
+intégrales approchées par la \key{méthode des rectangles}.
+
+%==================================================================
+\section{Formules essentielles}
+
+\textbf{Problèmes test.}
+\[
+  \text{(Poisson)}\quad
+  \begin{cases}-u''(x)=f(x), & x\in\,]0,1[\\ u(0)=u_0,\ u(1)=u_1\end{cases}
+  \qquad\qquad
+  \text{(Helmholtz)}\quad -\Delta u+\lambda u=f,\ \ \lambda>0.
+\]
+
+\textbf{Formulation faible (Poisson)} : trouver $u\in H^1_0(0,1)$ tel que
+$a(u,v)=b(v)\ \forall v\in H^1_0$, avec
+\[
+  a(u,v)=\int_0^1 u'(x)\,v'(x)\,dx,\qquad b(v)=\int_0^1 f(x)\,v(x)\,dx .
+\]
+
+\textbf{Espace des réseaux \& approximation universelle (Cybenko, 1989).}
+\begin{formbox}
+\[
+  V_{nn}=\Bigl\{\,x\mapsto \textstyle\sum_{i=1}^{n} c_i\,\sigma(w_i x+b_i)\ \Big|\
+  \theta=(c_i,w_i,b_i)_{1\le i\le n}\in\mathbb{R}^{3n}\Bigr\}.
+\]
+Un réseau à \emph{une} couche cachée + activation continue approxime
+\emph{uniformément} toute fonction continue.
+\end{formbox}
+
+\textbf{Méthode PINN — fonctionnelle d'énergie (formulation forte).}
+\begin{formbox}
+\[
+  E(u_\theta)=\int_{\Omega}\bigl|u_\theta''(x)+f(x)\bigr|^2dx
+   +\bigl(u_\theta(0)-u_0\bigr)^2+\bigl(u_\theta(1)-u_1\bigr)^2,
+  \qquad E(u^\star)=0 .
+\]
+\end{formbox}
+Discrétisation par collocation sur $N$ points $x_i$ (perte effectivement minimisée) :
+\[
+  \mathcal{L}(\theta)=
+  \underbrace{\frac1N\sum_{i=1}^{N}\bigl(u_\theta''(x_i)+f(x_i)\bigr)^2}_{\mathcal{L}_{\mathrm{PDE}}}
+  +\underbrace{\bigl(u_\theta(0)-u_0\bigr)^2+\bigl(u_\theta(1)-u_1\bigr)^2}_{\mathcal{L}_{\mathrm{BC}}},
+  \qquad \theta^\star=\arg\min_\theta \mathcal{L}(\theta).
+\]
+
+\textbf{Méthode Deep Ritz — énergie (formulation faible).} Si $a$ symétrique,
+la solution minimise $J(v)=\tfrac12 a(v,v)-b(v)$. Cas concrets (avec pénalisation
+des bords $\alpha,\beta$) :
+\begin{formbox}
+\[
+  J_{\text{Poisson}}(u)=\frac12\!\int_\Omega |u'|^2dx-\!\int_\Omega f\,u\,dx,
+  \qquad
+  J_{\text{Helmholtz}}(u)=\frac12\!\int_\Omega |u'|^2dx+\frac{\lambda}{2}\!\int_\Omega |u|^2dx-\!\int_\Omega f\,u\,dx .
+\]
+\end{formbox}
+
+\textbf{Activation \& optimisation.}
+\[
+  \sigma(x)=\tanh(x),\qquad \sigma'(x)=1-\tanh^2(x),\qquad
+  \theta \leftarrow \theta-\eta\,\nabla_\theta\mathcal{L}(\theta)\ \ (\text{Adam}).
+\]
+$\tanh\in C^\infty\Rightarrow u_\theta\in C^2$ et $u_\theta''$ calculable par autodiff.
+
+%==================================================================
+\section{L'implémentation (le code)}
+\textbf{Pile technique :} PyTorch + \texttt{torch.func} (\texttt{grad}, \texttt{vmap},
+\texttt{functional\_call}).
+
+\textbf{Architectures.} \texttt{snn} : réseau à \key{une} couche cachée
+($3n$ paramètres) pour PINN. \texttt{NN} : réseau \key{profond}
+(\texttt{ModuleList}, profondeur variable) pour Deep Ritz.
+
+\textbf{Dérivées par autodiff} (point central) : on dérive \emph{par rapport à
+l'entrée} $x$, deux fois, par composition de \texttt{grad}.
+\begin{lstlisting}
+def f_forward(x, net, params, buffers):
+    return torch.func.functional_call(net, (params, buffers), x.unsqueeze(-1)).squeeze()
+
+f_forward_x  = grad(f_forward, argnums=0)     # u'_theta  (derivee 1ere)
+f_forward_xx = grad(f_forward_x, argnums=0)   # u''_theta (derivee 2nde)
+\end{lstlisting}
+
+\textbf{Boucle PINN} (\texttt{optimal\_snn}) : $N=1000$ points, Adam $\eta=0{,}01$,
+1000 époques ; perte = résidu PDE + carrés des valeurs aux bords ; vectorisation
+par \texttt{vmap}.
+\begin{lstlisting}
+loss  = ((f_forward_xx_grid - f_grid)**2).mean()      # L_PDE  (residu)
+loss += f_forward(bc_0, net, params, buffers)**2       # L_BC en x=0
+loss += f_forward(bc_1, net, params, buffers)**2       # L_BC en x=1
+optimizer.zero_grad(); loss.backward(); optimizer.step()
+\end{lstlisting}
+
+\textbf{Version optimisée} (\texttt{snn\_optimized} / \texttt{optimal\_snn\_optimized}) :
+choix de l'activation via un dictionnaire (\texttt{tanh}, \texttt{relu},
+\texttt{sigmoid}), \key{jeu de validation} séparé, \key{sauvegarde des meilleurs
+poids} (\texttt{val\_loss} minimale, \texttt{.clone()}) pour contrer le
+sur-apprentissage, et calcul de l'\key{erreur $L^2$} contre la solution exacte.
+
+\textbf{Deep Ritz} (\texttt{DeepRitz}, \texttt{DeepRitz2}) : on n'utilise que la
+\key{dérivée première}, plus une \key{pénalisation des bords} $\alpha,\beta$.
+\begin{lstlisting}
+# Poisson : J = 0.5 <|u'|^2> - <f u> + penalites de bord
+loss = 0.5*(u_x_grid**2).mean() - (u_grid*f_grid).mean() \
+       + 10*f_forward(bc_0,net,params,buffers)**2 \
+       + 10*f_forward(bc_1,net,params,buffers)**2
+\end{lstlisting}
+
+\textbf{Choix techniques en bref :} dérivées \key{exactes} par autodiff (vs
+différences finies) ; \texttt{tanh} pour la régularité $C^\infty$ ; \texttt{vmap}
+pour vectoriser sans boucle \texttt{for} ; \texttt{Adam} (pas adaptatif) ;
+validation + meilleur modèle sauvegardé.
+
+%==================================================================
+\section{Résultats clés à retenir}
+\begin{center}\small
+\begin{tabular}{llccr}
+\toprule
+Configuration & Activation & Neurones & Couches & Loss val.\ min.\\
+\midrule
+PINN de base   & tanh    & 3  & 1  & $5{,}13\times10^{-3}$\\
+PINN optimisé  & tanh    & 5  & 1  & $1{,}03\times10^{-4}$\\
+PINN optimisé  & tanh    & 10 & 1  & $1{,}71\times10^{-5}$\\
+PINN optimisé  & tanh    & 50 & 1  & $1{,}80\times10^{-5}$\\
+PINN optimisé  & sigmoid & 50 & 1  & $1{,}58\times10^{-5}$\\
+PINN optimisé  & ReLU    & 50 & 1  & $4{,}99\times10^{-1}$\\
+DNN stable     & tanh    & 5  & 13 & $\approx 10^{-2}$\\
+DNN instable   & tanh    & 5  & 20 & $\approx 4{,}8\times10^{-1}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{itemize}
+  \item \key{tanh} est le meilleur choix ; \key{10 neurones suffisent} en 1D
+        (gain négligeable au-delà).
+  \item \key{ReLU échoue} : sa dérivée seconde est nulle p.p., le résidu
+        $u_\theta''+f$ ne peut pas être minimisé.
+  \item \key{Profondeur} : au-delà de $\sim$17 couches, la perte explose
+        (\key{vanishing gradient} : facteurs $1-\tanh^2\!\approx 0$). Le problème
+        1D ne justifie pas un réseau profond.
+  \item \key{Deep Ritz} converge plus lentement que PINN sur Poisson, mais évite
+        la dérivée seconde et s'applique quand l'énergie PINN n'est pas évidente
+        (cas Helmholtz, convergence rapide, $L^2\!\sim\!10^{-5}$).
+  \item \key{Pénalisation $\alpha,\beta$} (Deep Ritz) : trop faible $\Rightarrow$
+        \emph{underfitting} des bords ; trop forte $\Rightarrow$ les CL écrasent
+        l'EDP intérieure (\emph{overfitting} des bords).
+\end{itemize}
+
+%==================================================================
+\section{Applications concrètes des PINN}
+Au-delà du cas 1D du projet, les PINN sont utilisés pour :
+\begin{itemize}
+  \item \key{mécanique des fluides} (Navier-Stokes), aérodynamique, transferts
+        thermiques, diffusion ;
+  \item \key{ondes \& électromagnétisme} (Helmholtz, Maxwell), élasticité ;
+  \item \key{problèmes inverses} : identifier des paramètres / sources / propriétés
+        matériau à partir de mesures partielles ;
+  \item \key{assimilation de données} : combiner données rares et lois physiques ;
+  \item \key{grande dimension} : EDP où le maillage est impraticable
+        (finance — Black-Scholes, équations de Fokker-Planck\ldots).
+\end{itemize}
+Atouts : \key{sans maillage}, gèrent des géométries complexes, unifient
+problèmes directs et inverses.
+
+%==================================================================
+\section{Limites \& ouvertures}
+\subsection*{Limites}
+\begin{itemize}
+  \item \key{Optimisation non convexe} : pas de garantie d'atteindre le minimum
+        global (Cybenko garantit l'\emph{existence} d'un bon approximant, pas que la
+        descente le trouve).
+  \item \key{Équilibrage de la perte} : le poids relatif PDE / bords (et $\lambda$,
+        $\alpha$, $\beta$) est délicat à régler.
+  \item \key{Coût} des dérivées d'ordre élevé (double autodiff pour $u''$) ;
+        convergence parfois lente.
+  \item En \key{petite dimension}, souvent moins précis/rapide que les éléments finis.
+  \item \key{Capacité} limitée $\Rightarrow$ plateau de la loss ; profondeur
+        $\Rightarrow$ \key{vanishing gradient} avec tanh.
+\end{itemize}
+\subsection*{Ouvertures}
+\begin{itemize}
+  \item \key{Deep Ritz} : formulation faible, ne demande que $u'$, applicable plus
+        largement.
+  \item \key{Conditions aux bords « dures »} (imposées par construction) plutôt que
+        par pénalisation.
+  \item \key{Pondération adaptative} des termes de la perte ; échantillonnage
+        adaptatif des points de collocation.
+  \item \key{Architectures dédiées} (\emph{Fourier features}, SIREN) pour les
+        hautes fréquences ; extension \key{2D/3D}, équations non linéaires et
+        instationnaires, problèmes inverses.
+\end{itemize}
+
+%==================================================================
+\section{Questions de jury probables \& réponses}
+
+\begin{qbox}{Pourquoi \texttt{tanh} et pas \texttt{ReLU} ?}
+ReLU a une dérivée seconde \key{nulle presque partout} : le terme $u_\theta''$ du
+résidu est alors structurellement nul, la perte PDE ne peut pas être minimisée.
+\texttt{tanh} est $C^\infty$, donc $u_\theta''$ est bien définie et non nulle.
+\end{qbox}
+
+\begin{qbox}{Différence entre PINN et Deep Ritz ?}
+PINN : formulation \key{forte}, on minimise le résidu (il faut $u''$). Deep Ritz :
+formulation \key{faible}, on minimise une énergie (il ne faut que $u'$) — plus
+économique, et applicable même quand écrire une énergie « PINN » n'est pas évident
+(cas Helmholtz).
+\end{qbox}
+
+\begin{qbox}{Qu'est-ce que la différentiation automatique ? Différence avec les différences finies ?}
+C'est le calcul \key{exact} des dérivées via la règle de la chaîne appliquée au
+graphe de calcul du réseau. Contrairement aux différences finies, \key{pas de pas
+$h$ à choisir ni d'erreur de troncature}.
+\end{qbox}
+
+\begin{qbox}{Pourquoi parle-t-on d'apprentissage « non supervisé » ?}
+Il n'y a \key{aucune donnée} $(x,u(x))$. La « cible » est l'équation elle-même :
+on minimise son résidu. La physique remplace les étiquettes.
+\end{qbox}
+
+\begin{qbox}{Comment les conditions aux bords sont-elles imposées ?}
+Par \key{pénalisation} dans la perte (contrainte « molle »). Alternative possible :
+les imposer \key{par construction} (contrainte « dure »), p.\,ex.\ via un ansatz
+qui annule l'erreur de bord.
+\end{qbox}
+
+\begin{qbox}{Rôle des coefficients $\alpha,\beta$ (Deep Ritz) ?}
+Ils pondèrent la pénalisation des bords. Trop faibles : \key{underfitting} des CL.
+Trop forts : l'algorithme « oublie » l'EDP à l'intérieur (\key{overfitting} des bords).
+\end{qbox}
+
+\begin{qbox}{Pourquoi la loss stagne-t-elle (plateau) avec 3 neurones ?}
+\key{Capacité} insuffisante de $V_{nn}$ : le résidu ne peut pas être annulé.
+Il faut davantage de neurones (10 suffisent ici).
+\end{qbox}
+
+\begin{qbox}{Pourquoi un réseau très profond se dégrade-t-il ?}
+\key{Vanishing gradient} : en profondeur, les gradients sont multipliés par
+$1-\tanh^2\!\approx 0$, la rétropropagation devient inefficace. De plus, le
+problème 1D n'a pas de structure hiérarchique justifiant la profondeur.
+\end{qbox}
+
+\begin{qbox}{A-t-on une garantie de convergence vers la vraie solution ?}
+Non : l'optimisation est \key{non convexe}. On a une garantie d'\key{existence}
+d'un bon approximant (Cybenko), mais pas que la descente de gradient atteigne le
+minimum global.
+\end{qbox}
+
+\begin{qbox}{Combien de paramètres a le réseau à une couche ?}
+$3n$ : pour chaque neurone $i$, le poids $w_i$, le biais $b_i$ et le coefficient de
+sortie $c_i$.
+\end{qbox}
+
+\begin{qbox}{À quoi sert \texttt{vmap} ?}
+À \key{vectoriser} l'évaluation du réseau et de ses dérivées sur tous les points de
+collocation, sans boucle Python — donc beaucoup plus rapide.
+\end{qbox}
+
+\begin{qbox}{Que mesure $E(u)$, et pourquoi $E(u^\star)=0$ ?}
+Le \key{résidu intérieur} (violation de l'EDP) + la \key{violation des CL}. La
+solution exacte annule les deux termes, d'où $E(u^\star)=0$.
+\end{qbox}
+
+\begin{qbox}{À quoi sert le théorème de Lax-Milgram ?}
+Il garantit l'\key{existence et l'unicité} de la solution faible quand la forme
+bilinéaire $a$ est continue et \key{coercive} — fondement du cadre variationnel
+(Deep Ritz).
+\end{qbox}
+
+\begin{qbox}{La solution exacte $\sin(2\pi x)$ sert-elle à l'entraînement ?}
+Non : elle ne sert qu'à \key{valider} (calcul de l'erreur $L^2$). L'entraînement
+n'utilise que $f$ et les conditions aux bords.
+\end{qbox}
+
+\vfill
+\hrule height 0.4pt
+{\footnotesize\color{gray}\textbf{Références :} Cybenko (1989), \emph{Approximation by
+superpositions of a sigmoidal function} ; Weinan E \& Yu (2018), \emph{The Deep Ritz
+Method} ; Raissi, Perdikaris \& Karniadakis (2019), \emph{Physics-Informed Neural
+Networks}, J.\ Comput.\ Phys.\ 378.}
+
+\end{document}

@@ -1,0 +1,146 @@
+%=====================================================================
+%  Script oral — PARTIE 1 (Paul Rivaud)
+%  Réseaux de neurones pour la résolution d'EDP — Méthode PINN
+%  Prêt à lire tel quel. Durée visée : ~4 min 30.
+%  Compilation : pdflatex
+%=====================================================================
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\IfFileExists{french.ldf}{\usepackage[french]{babel}}{}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{xcolor}
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{titlesec}
+\usepackage[most]{tcolorbox}
+\usepackage{microtype}
+\usepackage{enumitem}
+
+\definecolor{bblue}{RGB}{51,51,178}
+\definecolor{dblue}{RGB}{38,38,134}
+\definecolor{lblue}{RGB}{233,233,243}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2pt}
+
+% En-tête de chaque diapo
+\newcommand{\diapo}[3]{%
+  \vspace{10pt}%
+  {\sffamily\bfseries\color{bblue}\large Diapo #1 — #2}%
+  \hfill{\sffamily\small\color{dblue}\itshape (#3)}\\[-2pt]
+  {\color{bblue}\rule{\linewidth}{0.8pt}}\\[4pt]}
+
+% Mots/idées à appuyer à l'oral
+\newcommand{\key}[1]{\textbf{#1}}
+
+\begin{document}
+
+%--- Titre
+\begin{center}
+  {\sffamily\bfseries\color{dblue}\Large Script oral — Partie 1}\\[3pt]
+  {\sffamily\color{bblue} Réseaux de neurones pour la résolution d'EDP — Méthode PINN}\\[6pt]
+  {\small Paul Rivaud \;\textbullet\; Projet 1A, CERMICS \;\textbullet\; 6 juin 2026
+  \;\textbullet\; durée visée : \,$\approx$\,4 min 30}
+\end{center}
+\vspace{4pt}
+
+%--- Encadré conseils
+\begin{tcolorbox}[colback=lblue,colframe=bblue,boxrule=0.8pt,arc=3pt,
+  left=8pt,right=8pt,top=5pt,bottom=5pt]
+  {\sffamily\bfseries\color{dblue}Ton \& posture.} Débit posé, regard vers le jury
+  (pas vers les slides), une respiration entre chaque diapo. Les mots
+  \key{en gras} sont à appuyer. Les formules sont écrites \emph{telles qu'on les
+  prononce} : lisez-les à voix haute sans les déchiffrer.
+\end{tcolorbox}
+
+%==================================================================
+\diapo{1}{Titre}{\,$\approx$\,20 s}
+Bonjour à tous. Nous vous présentons notre projet de première année, encadré par
+Sofiane Ezzehi au laboratoire CERMICS : \key{la résolution d'équations aux
+dérivées partielles par réseaux de neurones}. Je m'occupe de cette première
+partie : je pose le problème, je situe l'état de l'art, puis je présente la
+méthode au cœur de notre travail — les \key{Physics-Informed Neural Networks},
+les PINNs.
+
+\diapo{2}{Plan de la présentation}{\,$\approx$\,15 s}
+Voici le déroulé. Dans cette première partie, j'introduis le contexte et la
+méthode PINN. Mes camarades enchaîneront ensuite sur la \key{méthode Deep Ritz}
+et notre approche, puis sur les \key{difficultés et le code}, et enfin sur les
+\key{résultats numériques} et la conclusion.
+
+\diapo{3}{Contexte \& motivation}{\,$\approx$\,30 s}
+Les équations aux dérivées partielles sont partout : elles décrivent la diffusion
+de la chaleur, la mécanique des structures, ou encore certains modèles
+financiers. Le problème, c'est que la quasi-totalité d'entre elles \key{n'ont pas
+de solution analytique} : il faut donc les résoudre numériquement. La question
+qui guide tout notre projet est alors la suivante : \key{peut-on résoudre une EDP
+en exploitant la puissance des réseaux de neurones, sans passer par un maillage du
+domaine~?}
+
+\diapo{4}{Les méthodes classiques et leurs limites}{\,$\approx$\,35 s}
+Rappelons d'abord comment on procède classiquement. Les méthodes traditionnelles
+— différences finies, éléments finis — reposent toutes sur une
+\key{discrétisation} : on découpe le domaine en un \key{maillage}, et on résout
+l'équation sur ce maillage. C'est très efficace en petite dimension, mais le coût
+\key{explose en grande dimension} — c'est le fléau de la dimension — et le
+maillage devient délicat pour des géométries complexes. À droite, l'idée
+opposée : au lieu d'un maillage régulier, le réseau travaille à partir de points
+dispersés, dits \key{points de collocation}. Comme fil rouge de tout l'exposé,
+nous prendrons l'équation de Poisson en une dimension : \emph{moins u seconde
+égale f}, avec des conditions de Dirichlet fixées aux deux bords.
+
+\diapo{5}{Pourquoi des réseaux de neurones~?}{\,$\approx$\,35 s}
+Pourquoi penser que cela peut marcher~? Pour deux raisons. La première est
+théorique : le \key{théorème d'approximation universelle}, démontré par Cybenko
+en 1989, garantit qu'un réseau à \key{une seule couche cachée}, avec une
+activation continue, peut approcher \key{uniformément} n'importe quelle fonction
+continue. Autrement dit, il est légitime de chercher notre solution sous la forme
+d'un réseau. La seconde raison est l'idée maîtresse des PINNs : on \key{incorpore
+directement l'équation et les conditions aux bords dans l'apprentissage}. C'est un
+cadre \key{non supervisé} — aucune donnée étiquetée, aucune solution connue à
+l'avance : le réseau apprend en minimisant le \key{résidu} de l'équation
+elle-même.
+
+\diapo{6}{Principe des PINN}{\,$\approx$\,35 s}
+Concrètement, l'idée des PINNs — introduite par Raissi, Perdikaris et Karniadakis
+en 2019 — est la suivante : \key{le réseau} $u_\theta$ \key{est notre solution
+approchée}. Comme c'est une fonction explicite, on peut calculer ses dérivées
+\key{exactement}, par \key{différentiation automatique} — la même mécanique que
+celle qui sert à entraîner les réseaux. On évalue alors le \key{résidu} de
+l'équation, \emph{r égale u-thêta seconde plus f}, et on transforme ainsi l'EDP en
+un \key{problème d'optimisation}. Le schéma résume la boucle : on part des points,
+on les passe dans le réseau, on dérive, on calcule le résidu puis la perte, et la
+\key{rétropropagation} met à jour les paramètres — ici avec l'optimiseur Adam.
+
+\diapo{7}{Architecture du réseau}{\,$\approx$\,30 s}
+Voici l'architecture retenue. Une entrée scalaire $x$, une \key{couche cachée}
+de $n$ neurones avec une activation \key{tangente hyperbolique}, et une sortie :
+la valeur $u_\theta(x)$. L'ensemble des fonctions ainsi représentables forme
+l'espace $V_{nn}$, paramétré par $3n$ réels. Le choix de la tangente hyperbolique
+n'est pas anodin : elle est \key{indéfiniment dérivable}, donc notre solution est
+bien de classe $C^2$, et surtout sa \key{dérivée seconde est calculable
+proprement} par différentiation automatique — ce qui est indispensable pour une
+équation du second ordre.
+
+\diapo{8}{La fonction de perte physique}{\,$\approx$\,35 s}
+On arrive au cœur de la méthode : la \key{fonction de perte}. On définit une
+\key{fonctionnelle d'énergie} qui mesure à quel point le réseau viole l'équation à
+l'intérieur du domaine, augmentée de deux termes qui pénalisent le non-respect des
+conditions aux bords. En pratique, l'intégrale est approchée par une \key{moyenne
+sur N points de collocation} : la perte se lit en deux morceaux, le terme physique
+\emph{L-PDE} et le terme de bord \emph{L-BC}. Point clé : la \key{solution exacte
+est exactement celle qui annule cette énergie}. Entraîner le réseau revient donc à
+minimiser la perte par \key{descente de gradient} — Adam — le gradient étant
+fourni par rétropropagation.
+
+\diapo{9}{Conclusion de partie \& transition}{\,$\approx$\,20 s}
+Pour résumer cette première partie : les PINNs \key{reformulent une EDP en un
+problème d'optimisation}, où le réseau apprend à \key{annuler le résidu} de
+l'équation. Les atouts sont nets : \key{pas de maillage}, apprentissage
+\key{non supervisé}, et une approche qui passe bien à l'échelle en grande
+dimension et pour les problèmes inverses. Je laisse maintenant la parole à
+\key{[prénom du camarade]} pour la méthode Deep Ritz et notre implémentation.
+Merci de votre attention.
+
+\end{document}
