@@ -82,9 +82,6 @@ jupyter notebook code/PROJET.ipynb
 cd slides && pdflatex Partie1_PINN_slides.tex && pdflatex Partie1_PINN_slides.tex
 ```
 
-## 👤 My contribution — Paul Rivaud
-
-Within a 4-person team, I was responsible for **Part 1**: problem framing, state of the art, and the **PINN methodology** — mathematical formulation, energy functional, network architecture, and the physics-based loss. See `slides/` and `docs/`.
 
 ## 🛠 Tech stack
 
